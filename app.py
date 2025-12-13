@@ -1,12 +1,12 @@
 import streamlit as st
 from openai import OpenAI
+from fpdf import FPDF
 
 # ==========================================
 # ⚙️ MINIMALIST PAGE SETUP
 # ==========================================
 st.set_page_config(page_title="CareerOS", page_icon="⚫", layout="wide")
 
-# Custom CSS to hide default Streamlit clutter (Hamburger menu, Footer, etc.)
 hide_st_style = """
             <style>
             #MainMenu {visibility: hidden;}
@@ -18,27 +18,50 @@ hide_st_style = """
 st.markdown(hide_st_style, unsafe_allow_html=True)
 
 # ==========================================
-# 🧠 SYSTEM PROMPT (UNCHANGED)
+# 🧠 PDF GENERATION FUNCTIONS
+# ==========================================
+def create_pdf(text_content, style):
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_auto_page_break(auto=True, margin=15)
+    
+    if style == "Modern":
+        pdf.set_fill_color(30, 60, 114) 
+        pdf.rect(0, 0, 210, 30, 'F')
+        pdf.set_font("Arial", "B", 16)
+        pdf.set_text_color(255, 255, 255)
+        pdf.cell(0, 20, "DOCUMENT EXPORT", ln=True, align='C')
+        pdf.set_text_color(0, 0, 0)
+        pdf.ln(20)
+
+    elif style == "Creative":
+        pdf.set_fill_color(50, 50, 50)
+        pdf.rect(0, 0, 60, 297, 'F')
+        pdf.set_font("Courier", "B", 16)
+        pdf.set_text_color(255, 255, 255)
+        pdf.set_xy(10, 20)
+        pdf.cell(50, 10, "PROFILE", ln=True)
+        pdf.set_text_color(0, 0, 0)
+        pdf.set_xy(70, 20)
+
+    # Add Generated Text
+    if style == "Creative":
+        pdf.set_font("Courier", "", 12)
+        pdf.set_xy(70, 30)
+        safe_text = text_content.encode('latin-1', 'replace').decode('latin-1')
+        pdf.multi_cell(130, 6, safe_text)
+    else:
+        pdf.set_font("Arial", "", 12)
+        safe_text = text_content.encode('latin-1', 'replace').decode('latin-1')
+        pdf.multi_cell(0, 8, safe_text)
+        
+    return pdf
+
+# ==========================================
+# 🧠 SYSTEM PROMPT
 # ==========================================
 SYSTEM_PROMPT = """
 You are helping design and power a web application for job applications.
-The app has:
-- A dropdown where the user selects either "Resume Editor" or "Cover Letter Editor".
-- A text area to paste their base resume.
-- A text area to paste the job description.
-- If "Cover Letter Editor" is selected, an optional field for a short personal note.
-
-Behavior:
-1. When the mode is Resume Editor:
-   - Extract the most important skills, tools, and responsibilities from the job description.
-   - Map those to relevant parts of the user’s base resume.
-   - Rewrite the resume to target this job.
-   - Output: Keyword focus list, then Tailored resume.
-
-2. When the mode is Cover Letter Editor:
-   - Produce a one-page cover letter hooking into the company name and connecting resume highlights.
-   - Output: Keyword focus list, then Tailored cover letter.
-
 Output format:
 - Always start with: "Mode: resume" or "Mode: cover_letter"
 - Then: "Keyword focus:" followed by a bullet list.
@@ -46,45 +69,66 @@ Output format:
 """
 
 # ==========================================
-# 🎨 MINIMALIST SIDEBAR (UPDATED)
+# 🎨 SIDEBAR (WITH DROPDOWN)
 # ==========================================
 with st.sidebar:
     st.markdown("### `SYSTEM_CONFIG`")
-    
-    # Try to grab key from secrets first
     try:
         default_key = st.secrets["OPENAI_API_KEY"]
-        st.success("API Key Loaded from Secrets 🔒")
+        st.success("API Key Loaded 🔒")
     except:
         default_key = ""
 
-    # If secret is found, use it. If not, show text box.
     api_key = st.text_input("API Key", value=default_key, type="password")
-    
     st.markdown("---")
     
+    # --- RESTORED DROPDOWN ---
     st.markdown("### `MODE_SELECT`")
-    mode = st.radio("Target Output", ["Resume Editor", "Cover Letter Editor"], label_visibility="collapsed")
+    mode = st.selectbox("Target Output", ["Resume Editor", "Cover Letter Editor"])
     
-    st.markdown("---")
-    st.caption("v1.0.0 | CareerOS")
+    st.caption("v2.1.0 | CareerOS")
 
 # ==========================================
 # 📝 MAIN INTERFACE
 # ==========================================
-st.markdown("## `INPUT_DATA`")
+st.markdown(f"## `INPUT_DATA` ({mode})")
 
 c1, c2 = st.columns(2)
-
 with c1:
-    base_resume = st.text_area("Base Resume", height=300, placeholder="// Paste your raw resume text here...")
-
+    base_resume = st.text_area("Base Resume", height=250, placeholder="// Paste raw resume...")
 with c2:
-    job_description = st.text_area("Job Description", height=300, placeholder="// Paste the job post here...")
+    job_description = st.text_area("Job Description", height=250, placeholder="// Paste job post...")
 
+# --- RESTORED COVER LETTER LOGIC ---
 extra_context = ""
 if mode == "Cover Letter Editor":
-    extra_context = st.text_area("User Notes", placeholder="// Optional context (e.g. 'Emphasize my Python skills')")
+    st.info("✍️ **Cover Letter Notes:**")
+    extra_context = st.text_area("User Notes", height=100, placeholder="// E.g. 'Emphasize my leadership skills and Python experience'")
+
+# ==========================================
+# 🎨 TEMPLATE SELECTION
+# ==========================================
+st.markdown("---")
+st.markdown("### `SELECT_TEMPLATE`")
+
+if 'selected_template' not in st.session_state:
+    st.session_state.selected_template = "Modern"
+
+t1, t2 = st.columns(2)
+
+with t1:
+    try: st.image("assets/modern.png", caption="Modern")
+    except: st.markdown("🟦 **Modern**") 
+    if st.button("Select Modern", key="btn_mod", use_container_width=True):
+        st.session_state.selected_template = "Modern"
+
+with t2:
+    try: st.image("assets/creative.png", caption="Creative")
+    except: st.markdown("🟪 **Creative**")
+    if st.button("Select Creative", key="btn_cre", use_container_width=True):
+        st.session_state.selected_template = "Creative"
+
+st.info(f"Current Style: **{st.session_state.selected_template}**")
 
 # ==========================================
 # 🚀 EXECUTION
@@ -97,11 +141,12 @@ if st.button("RUN GENERATOR ⚡", type="primary", use_container_width=True):
     elif not base_resume or not job_description:
         st.warning("MISSING_INPUT_DATA")
     else:
-        with st.spinner("PROCESSING..."):
+        with st.spinner("AI GENERATING CONTENT..."):
             try:
                 client = OpenAI(api_key=api_key)
                 internal_mode = "resume" if mode == "Resume Editor" else "cover_letter"
                 
+                # --- UPDATED MESSAGE TO INCLUDE USER NOTES ---
                 user_message = f"Mode: {internal_mode}\n<resume>{base_resume}</resume>\n<job>{job_description}</job>\n<note>{extra_context}</note>"
 
                 response = client.chat.completions.create(
@@ -115,27 +160,26 @@ if st.button("RUN GENERATOR ⚡", type="primary", use_container_width=True):
                 
                 result = response.choices[0].message.content
                 
-                # Parsing Output
                 if "Result:" in result:
                     parts = result.split("Result:")
-                    meta = parts[0].replace("Mode: resume", "").replace("Mode: cover_letter", "").strip()
-                    content = parts[1].strip()
+                    meta = parts[0].strip()
+                    final_content = parts[1].strip()
                     
                     st.success("STATUS: COMPLETE")
                     
-                    # Display Keywords
-                    with st.expander("VIEW KEYWORD ANALYSIS", expanded=False):
-                        st.markdown(meta)
+                    # GENERATE PDF
+                    pdf = create_pdf(final_content, st.session_state.selected_template)
+                    pdf_bytes = pdf.output(dest='S').encode('latin-1')
                     
-                    # Display Final Result
-                    st.markdown("## `OUTPUT_RESULT`")
-                    st.text_area("Final Draft", value=content, height=600)
+                    st.markdown("### `PREVIEW`")
+                    st.text_area("Generated Text", value=final_content, height=400)
                     
                     st.download_button(
-                        "DOWNLOAD .TXT", 
-                        data=content, 
-                        file_name=f"tailored_{internal_mode}.txt",
-                        use_container_width=True
+                        label=f"⬇️ DOWNLOAD PDF ({st.session_state.selected_template})",
+                        data=pdf_bytes,
+                        file_name=f"tailored_{internal_mode}_{st.session_state.selected_template}.pdf",
+                        mime="application/pdf",
+                        type="primary"
                     )
                 else:
                     st.write(result)
